@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TripManager — POC Mapa</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      background: #f4f4f4;
+    }
+
+    /* ── Formulário ── */
+    #form-panel {
+      background: #1a73e8;
+      padding: 16px 20px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: flex-end;
+    }
+
+    #form-panel label {
+      display: flex;
+      flex-direction: column;
+      font-size: 11px;
+      color: rgba(255,255,255,.8);
+      gap: 4px;
+    }
+
+    #form-panel input,
+    #form-panel select {
+      padding: 7px 10px;
+      border-radius: 6px;
+      border: none;
+      font-size: 13px;
+      background: rgba(255,255,255,.15);
+      color: #fff;
+      outline: none;
+      min-width: 120px;
+    }
+
+    #form-panel input::placeholder { color: rgba(255,255,255,.6); }
+    #form-panel input:focus,
+    #form-panel select:focus { background: rgba(255,255,255,.25); }
+    #form-panel select option { color: #222; background: #fff; }
+
+    #btn-plan {
+      padding: 8px 22px;
+      background: #fff;
+      color: #1a73e8;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      height: 34px;
+      transition: opacity .15s;
+    }
+
+    #btn-plan:disabled { opacity: .5; cursor: not-allowed; }
+
+    /* ── Layout principal ── */
+    #main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      width: 340px;
+      min-width: 340px;
+      background: #fff;
+      border-right: 1px solid #e0e0e0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #sidebar-header {
+      padding: 16px 20px;
+      background: #0d5bbd;
+      color: #fff;
+    }
+
+    #sidebar-header h1 { font-size: 16px; }
+    #sidebar-header p  { font-size: 12px; opacity: .8; margin-top: 4px; line-height: 1.4; }
+
+    /* ── Estado vazio / loading ── */
+    #empty-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #aaa;
+      gap: 10px;
+      font-size: 13px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    #empty-state .icon { font-size: 40px; }
+
+    #loading {
+      display: none;
+      flex: 1;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      color: #555;
+      font-size: 13px;
+    }
+
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 4px solid #e0e0e0;
+      border-top-color: #1a73e8;
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Erro ── */
+    #error-state {
+      display: none;
+      flex: 1;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #c62828;
+      gap: 10px;
+      font-size: 13px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    #error-state .icon { font-size: 36px; }
+
+    /* ── Itinerário ── */
+    #itinerary-panel {
+      display: none;
+      flex-direction: column;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    #day-tabs {
+      display: flex;
+      overflow-x: auto;
+      border-bottom: 1px solid #e0e0e0;
+      background: #fafafa;
+    }
+
+    .day-tab {
+      flex-shrink: 0;
+      padding: 10px 16px;
+      font-size: 13px;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      color: #555;
+      white-space: nowrap;
+    }
+
+    .day-tab.active {
+      border-color: #1a73e8;
+      color: #1a73e8;
+      font-weight: 600;
+    }
+
+    #activities-list {
+      overflow-y: auto;
+      flex: 1;
+      padding: 12px;
+    }
+
+    .activity-card {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      padding: 10px 12px;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      border: 1px solid #e8e8e8;
+      transition: background .15s;
+    }
+
+    .activity-card:hover { background: #f0f7ff; }
+    .activity-card.highlighted { background: #e8f0fe; border-color: #1a73e8; }
+    .activity-card.no-coords { cursor: default; opacity: .7; }
+
+    .pin-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .activity-info { flex: 1; }
+    .activity-info .time  { font-size: 11px; color: #888; }
+    .activity-info .name  { font-size: 13px; font-weight: 600; color: #222; margin: 2px 0; }
+    .activity-info .place { font-size: 12px; color: #555; }
+    .activity-info .cost  { font-size: 11px; color: #1a73e8; margin-top: 4px; }
+
+    /* ── Mapa ── */
+    #map { flex: 1; }
+
+    /* ── Legenda ── */
+    .legend {
+      background: #fff;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 12px;
+      line-height: 22px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.15);
+    }
+
+    .legend b { display: block; margin-bottom: 4px; }
+    .legend span { margin-right: 6px; }
+  </style>
+</head>
+<body>
+
+  <!-- Formulário de input -->
+  <div id="form-panel">
+    <label>
+      Destino *
+      <input id="f-destination" type="text" placeholder="ex: Lisboa, Portugal" />
+    </label>
+    <label>
+      Dias *
+      <input id="f-days" type="number" min="1" max="30" value="3" style="width:70px" />
+    </label>
+    <label>
+      Viajantes
+      <input id="f-travelers" type="number" min="1" value="1" style="width:70px" />
+    </label>
+    <label>
+      Orçamento
+      <select id="f-budget">
+        <option value="">Não informado</option>
+        <option value="baixo">Baixo</option>
+        <option value="médio" selected>Médio</option>
+        <option value="alto">Alto</option>
+      </select>
+    </label>
+    <label>
+      Estilo
+      <select id="f-style">
+        <option value="moderado" selected>Moderado</option>
+        <option value="relaxado">Relaxado</option>
+        <option value="intenso">Intenso</option>
+      </select>
+    </label>
+    <label>
+      Preferências
+      <input id="f-prefs" type="text" placeholder="cultura, gastronomia..." style="min-width:180px" />
+    </label>
+    <button id="btn-plan">Planejar viagem</button>
+  </div>
+
+  <div id="main">
+    <!-- Sidebar -->
+    <div id="sidebar">
+      <div id="sidebar-header">
+        <h1 id="trip-title">TripManager</h1>
+        <p id="trip-summary">Preencha o formulário e clique em "Planejar viagem".</p>
+      </div>
+
+      <!-- Estado inicial -->
+      <div id="empty-state">
+        <div class="icon">🗺️</div>
+        <div>Seu roteiro aparecerá aqui após a geração.</div>
+      </div>
+
+      <!-- Loading -->
+      <div id="loading">
+        <div class="spinner"></div>
+        <div>Gerando seu roteiro com IA...<br/><small style="color:#aaa">Isso pode levar alguns segundos</small></div>
+      </div>
+
+      <!-- Erro -->
+      <div id="error-state">
+        <div class="icon">⚠️</div>
+        <div id="error-msg">Ocorreu um erro ao gerar o roteiro.</div>
+      </div>
+
+      <!-- Itinerário -->
+      <div id="itinerary-panel">
+        <div id="day-tabs"></div>
+        <div id="activities-list"></div>
+      </div>
+    </div>
+
+    <!-- Mapa -->
+    <div id="map"></div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    const API_URL = "http://localhost:8000/trip/plan";
+
+    const TYPE_CONFIG = {
+      passeio:     { emoji: "🏛️", color: "#1a73e8", bg: "#e8f0fe" },
+      restaurante: { emoji: "🍽️", color: "#e53935", bg: "#fdecea" },
+      hospedagem:  { emoji: "🏨", color: "#2e7d32", bg: "#e8f5e9" },
+      transporte:  { emoji: "🚌", color: "#f57c00", bg: "#fff3e0" },
+    };
+
+    function getConfig(type) {
+      return TYPE_CONFIG[type] ?? TYPE_CONFIG.passeio;
+    }
+
+    // ── Mapa ────────────────────────────────────────────────────────────────
+    const map = L.map("map").setView([0, 0], 2);
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>',
+      maxZoom: 19,
+    }).addTo(map);
+
+    const legend = L.control({ position: "bottomright" });
+    legend.onAdd = () => {
+      const div = L.DomUtil.create("div", "legend");
+      div.innerHTML = `<b>Tipos de local</b>` +
+        Object.entries(TYPE_CONFIG).map(([type, cfg]) =>
+          `<div><span>${cfg.emoji}</span>${type[0].toUpperCase() + type.slice(1)}</div>`
+        ).join("");
+      return div;
+    };
+    legend.addTo(map);
+
+    let currentMarkers = [];
+    let currentData = null;
+
+    function clearMarkers() {
+      currentMarkers.forEach(m => map.removeLayer(m));
+      currentMarkers = [];
+    }
+
+    // ── Estados da sidebar ───────────────────────────────────────────────────
+    function showState(state) {
+      document.getElementById("empty-state").style.display      = state === "empty"     ? "flex" : "none";
+      document.getElementById("loading").style.display          = state === "loading"   ? "flex" : "none";
+      document.getElementById("error-state").style.display      = state === "error"     ? "flex" : "none";
+      document.getElementById("itinerary-panel").style.display  = state === "itinerary" ? "flex" : "none";
+    }
+
+    showState("empty");
+
+    // ── Renderiza roteiro ────────────────────────────────────────────────────
+    function renderTrip(data) {
+      currentData = data;
+
+      // Header
+      document.getElementById("trip-title").textContent =
+        `${data.destination} — ${data.total_days} dias`;
+      document.getElementById("trip-summary").textContent = data.summary;
+
+      // Limpa markers e tabs anteriores
+      clearMarkers();
+      const tabsContainer   = document.getElementById("day-tabs");
+      const listContainer   = document.getElementById("activities-list");
+      tabsContainer.innerHTML = "";
+      listContainer.innerHTML = "";
+
+      // Cria markers indexados por posição no map_pins
+      const markersByKey = {};
+      data.map_pins.forEach((pin, idx) => {
+        const cfg = getConfig(pin.type);
+        const icon = L.divIcon({
+          className: "",
+          html: `<div style="
+            background:${cfg.color};color:#fff;
+            border-radius:50% 50% 50% 0;transform:rotate(-45deg);
+            width:36px;height:36px;
+            display:flex;align-items:center;justify-content:center;
+            box-shadow:0 2px 6px rgba(0,0,0,.35);font-size:16px;
+          "><span style="transform:rotate(45deg)">${cfg.emoji}</span></div>`,
+          iconSize: [36, 36],
+          iconAnchor: [18, 36],
+          popupAnchor: [0, -36],
+        });
+
+        const marker = L.marker([pin.coordinates.lat, pin.coordinates.lng], { icon })
+          .addTo(map)
+          .bindPopup(`
+            <div style="min-width:180px">
+              <div style="font-weight:700;font-size:13px">${pin.activity}</div>
+              <div style="color:#666;font-size:12px;margin:4px 0">${pin.location}</div>
+              <div style="color:#1a73e8;font-size:11px">Dia ${pin.day} — ${pin.time}</div>
+            </div>
+          `);
+
+        markersByKey[`${pin.day}-${idx}`] = marker;
+        currentMarkers.push(marker);
+      });
+
+      // Ajusta zoom para mostrar todos os pins
+      if (currentMarkers.length > 0) {
+        const group = L.featureGroup(currentMarkers);
+        map.fitBounds(group.getBounds().pad(0.15));
+      }
+
+      // Abas e atividades
+      function renderActivities(dayNum) {
+        document.querySelectorAll(".day-tab").forEach(t =>
+          t.classList.toggle("active", Number(t.dataset.day) === dayNum)
+        );
+
+        const dayData = data.itinerary.find(d => d.day === dayNum);
+        if (!dayData) return;
+        listContainer.innerHTML = "";
+
+        dayData.activities.forEach((act) => {
+          const cfg = getConfig(act.type ?? "passeio");
+          const pinIdx = data.map_pins.findIndex(
+            p => p.day === dayNum && p.time === act.time && p.activity === act.activity
+          );
+          const hasCoords = act.coordinates != null;
+
+          const card = document.createElement("div");
+          card.className = "activity-card" + (hasCoords ? "" : " no-coords");
+
+          card.innerHTML = `
+            <div class="pin-icon" style="background:${cfg.bg}">${cfg.emoji}</div>
+            <div class="activity-info">
+              <div class="time">${act.time}</div>
+              <div class="name">${act.activity}</div>
+              <div class="place">${act.location}</div>
+              ${act.estimated_cost ? `<div class="cost">${act.estimated_cost}</div>` : ""}
+            </div>
+          `;
+
+          if (hasCoords) {
+            card.addEventListener("click", () => {
+              map.setView([act.coordinates.lat, act.coordinates.lng], 16);
+              const marker = markersByKey[`${dayNum}-${pinIdx}`];
+              if (marker) marker.openPopup();
+              document.querySelectorAll(".activity-card").forEach(c => c.classList.remove("highlighted"));
+              card.classList.add("highlighted");
+            });
+          }
+
+          listContainer.appendChild(card);
+        });
+
+        if (dayData.daily_cost_estimate) {
+          const footer = document.createElement("div");
+          footer.style.cssText = "text-align:right;padding:8px 4px;font-size:12px;color:#555;border-top:1px solid #eee;margin-top:4px";
+          footer.textContent = `Total estimado do dia: ${dayData.daily_cost_estimate}`;
+          listContainer.appendChild(footer);
+        }
+      }
+
+      data.itinerary.forEach(day => {
+        const tab = document.createElement("div");
+        tab.className = "day-tab";
+        tab.dataset.day = day.day;
+        tab.textContent = `Dia ${day.day}`;
+        tab.addEventListener("click", () => renderActivities(day.day));
+        tabsContainer.appendChild(tab);
+      });
+
+      renderActivities(1);
+      showState("itinerary");
+    }
+
+    // ── Envio do formulário ──────────────────────────────────────────────────
+    document.getElementById("btn-plan").addEventListener("click", async () => {
+      const destination = document.getElementById("f-destination").value.trim();
+      const days        = parseInt(document.getElementById("f-days").value);
+
+      if (!destination) {
+        alert("Informe o destino da viagem.");
+        return;
+      }
+
+      if (!days || days < 1) {
+        alert("Informe um número de dias válido.");
+        return;
+      }
+
+      const prefsRaw = document.getElementById("f-prefs").value.trim();
+      const preferences = prefsRaw
+        ? prefsRaw.split(",").map(p => p.trim()).filter(Boolean)
+        : [];
+
+      const body = {
+        destination,
+        days,
+        travelers: parseInt(document.getElementById("f-travelers").value) || 1,
+        budget:       document.getElementById("f-budget").value || null,
+        travel_style: document.getElementById("f-style").value || null,
+        preferences,
+      };
+
+      document.getElementById("btn-plan").disabled = true;
+      showState("loading");
+
+      try {
+        const res = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail ?? `Erro ${res.status}`);
+        }
+
+        const data = await res.json();
+        renderTrip(data);
+
+      } catch (err) {
+        document.getElementById("error-msg").textContent =
+          `Erro ao gerar roteiro: ${err.message}`;
+        showState("error");
+      } finally {
+        document.getElementById("btn-plan").disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
