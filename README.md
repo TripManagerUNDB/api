@@ -1,4 +1,4 @@
-# TripManager — Documentação de Integração Front-end
+# TripManager — API
 
 ## Visão geral
 
