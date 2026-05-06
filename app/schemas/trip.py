@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Literal, Optional
 
 
 class TripRequest(BaseModel):
@@ -43,7 +43,7 @@ class MapPin(BaseModel):
     time: str
     activity: str
     location: str
-    type: str = Field(description="Tipo do local: restaurante, passeio, transporte, hospedagem")
+    type: Literal["passeio", "restaurante", "hospedagem", "transporte"]
     coordinates: Coordinates
 
 
