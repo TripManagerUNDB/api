@@ -2,7 +2,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.routers import trip
+from app.routers import trip, validate
 
 logging.basicConfig(
     level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
@@ -23,6 +23,7 @@ app.add_middleware(
 )
 
 app.include_router(trip.router)
+app.include_router(validate.router)
 
 
 @app.get("/health", tags=["Health"])
