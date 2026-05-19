@@ -104,7 +104,7 @@ def generate_trip_plan(req: TripRequest) -> TripResponse:
         {"role": "user", "content": _build_user_prompt(req, restaurants_info)},
     ]
 
-    raw_content, model_used = chat_with_retry(messages, temperature=0.7, max_tokens=4096)
+    raw_content, model_used = chat_with_retry(messages, temperature=0.7, max_tokens=8192)
 
     try:
         data = _extract_json(raw_content)
@@ -119,6 +119,11 @@ def generate_trip_plan(req: TripRequest) -> TripResponse:
         for act in day.get("activities", [])
         if act.get("location")
     ]
+    
+    # Geocodifica o centro da cidade como fallback
+    city_center = geocode_locations([req.destination], req.destination)
+    fallback_coords = city_center.get(req.destination)
+
     coords_map = geocode_locations(all_locations, req.destination)
 
     itinerary: list[DayPlan] = []
@@ -128,7 +133,7 @@ def generate_trip_plan(req: TripRequest) -> TripResponse:
         activities: list[ActivityItem] = []
         for act in day.get("activities", []):
             location = act.get("location", "")
-            geo = coords_map.get(location)
+            geo = coords_map.get(location) or fallback_coords
             coordinates = Coordinates(**geo) if geo else None
 
             activities.append(ActivityItem(

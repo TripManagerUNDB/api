@@ -6,7 +6,6 @@ logger = logging.getLogger(__name__)
 
 GROQ_NARRATIVE_MODELS = [
     "llama-3.3-70b-versatile",
-    "qwen/qwen3-32b",
     "llama-3.1-8b-instant",
 ]
 
@@ -21,7 +20,7 @@ def chat_with_retry(
     max_tokens: int = 4096,
 ) -> tuple[str, str]:
     """
-    Tenta cada modelo em ordem. Avança para o próximo ao atingir rate-limit.
+    Tenta cada modelo em ordem. Avança para o próximo ao atingir rate-limit ou token limit.
     Retorna (conteúdo, modelo_usado).
     """
     client = _build_client()
@@ -46,9 +45,8 @@ def chat_with_retry(
             continue
 
         except APIStatusError as exc:
-            # 429 também pode chegar como APIStatusError dependendo da versão do SDK
-            if exc.status_code == 429:
-                logger.warning("Status 429 no modelo %s, tentando próximo.", model)
+            if exc.status_code in (429, 413):
+                logger.warning("Status %s no modelo %s, tentando próximo.", exc.status_code, model)
                 last_error = exc
                 continue
             logger.error("Erro de API no modelo %s: %s", model, exc)
