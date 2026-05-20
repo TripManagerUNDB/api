@@ -6,10 +6,6 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
-      - key: GROQ_API_KEY
-        sync: false
-      - key: GOOGLE_MAPS_API_KEY
-        sync: false
       - key: APP_ENV
         value: production
       - key: LOG_LEVEL
